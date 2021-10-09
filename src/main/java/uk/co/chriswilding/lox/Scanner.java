@@ -8,7 +8,6 @@ import java.util.Map;
 
 @RequiredArgsConstructor
 class Scanner {
-
     private static final Map<String, TokenType> keywords = Map.ofEntries(
         Map.entry("and", TokenType.AND),
         Map.entry("class", TokenType.CLASS),
