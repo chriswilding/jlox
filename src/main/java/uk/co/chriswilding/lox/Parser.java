@@ -1,32 +1,71 @@
 package uk.co.chriswilding.lox;
 
 import lombok.RequiredArgsConstructor;
+import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Unary;
+import uk.co.chriswilding.lox.expr.Variable;
+import uk.co.chriswilding.lox.stmt.Block;
+import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.Print;
+import uk.co.chriswilding.lox.stmt.Stmt;
+import uk.co.chriswilding.lox.stmt.Var;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
 class Parser {
-    private static class ParseError extends RuntimeException {}
+    private static class ParseError extends RuntimeException {
+    }
 
     private final List<Token> tokens;
     private int current = 0;
 
-    Expr parse() {
-        try {
-            return expression();
-        } catch (ParseError error) {
-            return null;
+    List<Stmt> parse() {
+        var statements = new ArrayList<Stmt>();
+        while (!isAtEnd()) {
+            statements.add(declaration());
         }
+
+        return statements;
     }
 
     private Token advance() {
         if (!isAtEnd()) current++;
         return previous();
+    }
+
+    private Expr assignment() {
+        var expr = equality();
+
+        if (match(TokenType.EQUAL)) {
+            var equals = previous();
+            var value = assignment();
+
+            if (expr instanceof Variable) {
+                var name = ((Variable) expr).name();
+                return new Assign(name, value);
+            }
+
+            error(equals, "Invalid assignment target.");
+        }
+
+        return expr;
+    }
+
+    private List<Stmt> block() {
+        var statements = new ArrayList<Stmt>();
+
+        while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+            statements.add(declaration());
+        }
+
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after block.");
+        return statements;
     }
 
     private boolean check(TokenType type) {
@@ -52,6 +91,16 @@ class Parser {
         throw error(peek(), message);
     }
 
+    private Stmt declaration() {
+        try {
+            if (match(TokenType.VAR)) return varDeclaration();
+            return statement();
+        } catch (ParseError error) {
+            synchronize();
+            return null;
+        }
+    }
+
     private Expr equality() {
         var expr = comparison();
 
@@ -70,7 +119,13 @@ class Parser {
     }
 
     private Expr expression() {
-        return equality();
+        return assignment();
+    }
+
+    private Stmt expressionStatement() {
+        var expr = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after expression.");
+        return new Expression(expr);
     }
 
     private Expr factor() {
@@ -117,6 +172,10 @@ class Parser {
             return new Literal(previous().literal());
         }
 
+        if (match(TokenType.IDENTIFIER)) {
+            return new Variable(previous());
+        }
+
         if (match(TokenType.LEFT_PAREN)) {
             var expr = expression();
             consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
@@ -124,6 +183,19 @@ class Parser {
         }
 
         throw error(peek(), "Expect expression.");
+    }
+
+    private Stmt printStatement() {
+        var value = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        return new Print(value);
+    }
+
+    private Stmt statement() {
+        if (match(TokenType.PRINT)) return printStatement();
+        if (match(TokenType.LEFT_BRACE)) return new Block(block());
+
+        return expressionStatement();
     }
 
     private void synchronize() {
@@ -168,5 +240,17 @@ class Parser {
         }
 
         return primary();
+    }
+
+    private Stmt varDeclaration() {
+        var name = consume(TokenType.IDENTIFIER, "Expect variable name.");
+
+        Expr initializer = null;
+        if (match(TokenType.EQUAL)) {
+            initializer = expression();
+        }
+
+        consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+        return new Var(name, initializer);
     }
 }

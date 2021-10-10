@@ -1,13 +1,30 @@
 package uk.co.chriswilding.lox;
 
+import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Unary;
-import uk.co.chriswilding.lox.expr.Visitor;
+import uk.co.chriswilding.lox.expr.Variable;
+import uk.co.chriswilding.lox.stmt.Block;
+import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.Print;
+import uk.co.chriswilding.lox.stmt.Stmt;
+import uk.co.chriswilding.lox.stmt.Var;
 
-class Interpreter implements Visitor<Object> {
+import java.util.List;
+
+class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.chriswilding.lox.stmt.Visitor<Void> {
+    private Environment environment = new Environment();
+
+    @Override
+    public Object visitAssignExpr(Assign expr) {
+        var value = evaluate(expr.value());
+        environment.assign(expr.name(), value);
+        return value;
+    }
+
     @Override
     public Object visitBinaryExpr(Binary expr) {
         var left = evaluate(expr.left());
@@ -61,6 +78,18 @@ class Interpreter implements Visitor<Object> {
     }
 
     @Override
+    public Void visitBlockStmt(Block stmt) {
+        executeBlock(stmt.statements(), new Environment(environment));
+        return null;
+    }
+
+    @Override
+    public Void visitExpressionStmt(Expression stmt) {
+        evaluate(stmt.expression());
+        return null;
+    }
+
+    @Override
     public Object visitGroupingExpr(Grouping expr) {
         return evaluate(expr.expression());
     }
@@ -68,6 +97,13 @@ class Interpreter implements Visitor<Object> {
     @Override
     public Object visitLiteralExpr(Literal expr) {
         return expr.value();
+    }
+
+    @Override
+    public Void visitPrintStmt(Print stmt) {
+        var value = evaluate(stmt.expression());
+        System.out.println(stringify(value));
+        return null;
     }
 
     @Override
@@ -84,10 +120,27 @@ class Interpreter implements Visitor<Object> {
         };
     }
 
-    void interpret(Expr expression) {
+    @Override
+    public Object visitVariableExpr(Variable expr) {
+        return environment.get(expr.name());
+    }
+
+    @Override
+    public Void visitVarStmt(Var stmt) {
+        Object value = null;
+        if (stmt.initializer() != null) {
+            value = evaluate(stmt.initializer());
+        }
+
+        environment.define(stmt.name().lexeme(), value);
+        return null;
+    }
+
+    void interpret(List<Stmt> statements) {
         try {
-            var value = evaluate(expression);
-            System.out.println(stringify(value));
+            for (var statement : statements) {
+                execute(statement);
+            }
         } catch (RuntimeError error) {
             Lox.runtimeError(error);
         }
@@ -107,6 +160,10 @@ class Interpreter implements Visitor<Object> {
         return expr.accept(this);
     }
 
+    private void execute(Stmt stmt) {
+        stmt.accept(this);
+    }
+
     private boolean isEqual(Object left, Object right) {
         if (left == null && right == null) return true;
         if (left == null) return false;
@@ -117,6 +174,19 @@ class Interpreter implements Visitor<Object> {
         if (object == null) return false;
         if (object instanceof Boolean) return (boolean) object;
         return true;
+    }
+
+    private void executeBlock(List<Stmt> statements, Environment environment) {
+        var previous = this.environment;
+        try {
+            this.environment = environment;
+
+            for (var statement : statements) {
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
     }
 
     private String stringify(Object object) {
