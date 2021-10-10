@@ -6,15 +6,19 @@ import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
+import uk.co.chriswilding.lox.expr.Logical;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
 import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.If;
 import uk.co.chriswilding.lox.stmt.Print;
 import uk.co.chriswilding.lox.stmt.Stmt;
 import uk.co.chriswilding.lox.stmt.Var;
+import uk.co.chriswilding.lox.stmt.While;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -39,8 +43,20 @@ class Parser {
         return previous();
     }
 
-    private Expr assignment() {
+    private Expr and() {
         var expr = equality();
+
+        while (match(TokenType.AND)) {
+            var operator = previous();
+            var right = equality();
+            expr = new Logical(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr assignment() {
+        var expr = or();
 
         if (match(TokenType.EQUAL)) {
             var equals = previous();
@@ -140,6 +156,62 @@ class Parser {
         return expr;
     }
 
+    private Stmt forStatement() {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+
+        Stmt initializer;
+        if (match(TokenType.SEMICOLON)) {
+            initializer = null;
+        } else if (match(TokenType.VAR)) {
+            initializer = varDeclaration();
+        } else {
+            initializer = expressionStatement();
+        }
+
+        Expr condition = null;
+        if (!check(TokenType.SEMICOLON)) {
+            condition = expression();
+        }
+        consume(TokenType.SEMICOLON, "Expect ';' after loop condition.");
+
+        Expr increment = null;
+        if (!check(TokenType.RIGHT_PAREN)) {
+            increment = expression();
+        }
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        var body = statement();
+
+        if (increment != null) {
+            body = new Block(Arrays.asList(body, new Expression(increment)));
+        }
+
+        if (condition == null) {
+            condition = new Literal(true);
+        }
+        body = new While(condition, body);
+
+        if (initializer != null) {
+            body = new Block(Arrays.asList(initializer, body));
+        }
+
+        return body;
+    }
+
+    private Stmt ifStatement() {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
+        var condition = expression();
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition.");
+
+        var thenBranch = statement();
+        Stmt elseBranch = null;
+        if (match(TokenType.ELSE)) {
+            elseBranch = statement();
+        }
+
+        return new If(condition, thenBranch, elseBranch);
+    }
+
     private boolean isAtEnd() {
         return peek().type() == TokenType.EOF;
     }
@@ -153,6 +225,18 @@ class Parser {
         }
 
         return false;
+    }
+
+    private Expr or() {
+        var expr = and();
+
+        while (match(TokenType.OR)) {
+            var operator = previous();
+            var right = and();
+            expr = new Logical(expr, operator, right);
+        }
+
+        return expr;
     }
 
     private Token peek() {
@@ -192,7 +276,10 @@ class Parser {
     }
 
     private Stmt statement() {
+        if (match(TokenType.FOR)) return forStatement();
+        if (match(TokenType.IF)) return ifStatement();
         if (match(TokenType.PRINT)) return printStatement();
+        if (match(TokenType.WHILE)) return whileStatement();
         if (match(TokenType.LEFT_BRACE)) return new Block(block());
 
         return expressionStatement();
@@ -252,5 +339,14 @@ class Parser {
 
         consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
         return new Var(name, initializer);
+    }
+
+    private Stmt whileStatement() {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+        var condition = expression();
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
+        var body = statement();
+
+        return new While(condition, body);
     }
 }

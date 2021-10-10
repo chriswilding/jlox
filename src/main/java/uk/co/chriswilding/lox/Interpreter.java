@@ -5,13 +5,16 @@ import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
+import uk.co.chriswilding.lox.expr.Logical;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
 import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.If;
 import uk.co.chriswilding.lox.stmt.Print;
 import uk.co.chriswilding.lox.stmt.Stmt;
 import uk.co.chriswilding.lox.stmt.Var;
+import uk.co.chriswilding.lox.stmt.While;
 
 import java.util.List;
 
@@ -90,6 +93,16 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     }
 
     @Override
+    public Void visitIfStmt(If stmt) {
+        if (isTruthy(evaluate(stmt.condition()))) {
+            execute(stmt.thenBranch());
+        } else if (stmt.elseBranch() != null) {
+            execute(stmt.elseBranch());
+        }
+        return null;
+    }
+
+    @Override
     public Object visitGroupingExpr(Grouping expr) {
         return evaluate(expr.expression());
     }
@@ -97,6 +110,19 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     @Override
     public Object visitLiteralExpr(Literal expr) {
         return expr.value();
+    }
+
+    @Override
+    public Object visitLogicalExpr(Logical expr) {
+        var left = evaluate(expr.left());
+
+        if (expr.operator().type() == TokenType.OR) {
+            if (isTruthy(left)) return left;
+        } else {
+            if (!isTruthy(left)) return left;
+        }
+
+        return evaluate(expr.right());
     }
 
     @Override
@@ -133,6 +159,14 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
         }
 
         environment.define(stmt.name().lexeme(), value);
+        return null;
+    }
+
+    @Override
+    public Void visitWhileStmt(While stmt) {
+        while (isTruthy(evaluate(stmt.condition()))) {
+            execute(stmt.body());
+        }
         return null;
     }
 
