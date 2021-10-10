@@ -11,7 +11,7 @@ public interface Visitor<R> {
 
     R visitLiteralExpr(Literal expr);
 
-    R visitLogicalExpr(Logical logical);
+    R visitLogicalExpr(Logical expr);
 
     R visitUnaryExpr(Unary expr);
 

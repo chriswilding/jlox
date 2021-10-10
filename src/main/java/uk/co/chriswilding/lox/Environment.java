@@ -13,7 +13,7 @@ class Environment {
 
     private final Map<String, Object> values = new HashMap<>();
 
-    public void assign(Token name, Object value) {
+    void assign(Token name, Object value) {
         if (values.containsKey(name.lexeme())) {
             values.put(name.lexeme(), value);
             return;
@@ -25,6 +25,10 @@ class Environment {
         }
 
         throw new RuntimeError(name, "Undefined variable '" + name.lexeme() + "'.");
+    }
+
+    void assignAt(Integer distance, Token name, Object value) {
+        ancestor(distance).values.put(name.lexeme(), value);
     }
 
     void define(String name, Object value) {
@@ -39,5 +43,17 @@ class Environment {
         if (enclosing != null) return enclosing.get(name);
 
         throw new RuntimeError(name, "Undefined variable '" + name.lexeme() + "'.");
+    }
+
+    Object getAt(Integer distance, String name) {
+        return ancestor(distance).values.get(name);
+    }
+
+    private Environment ancestor(int distance) {
+        var environment = this;
+        for (var i = 0; i < distance; i++) {
+            environment = environment.enclosing;
+        }
+        return environment;
     }
 }

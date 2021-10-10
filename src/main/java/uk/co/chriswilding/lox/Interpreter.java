@@ -19,12 +19,15 @@ import uk.co.chriswilding.lox.stmt.Stmt;
 import uk.co.chriswilding.lox.stmt.Var;
 import uk.co.chriswilding.lox.stmt.While;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.chriswilding.lox.stmt.Visitor<Void> {
     @Getter
     private final Environment globals = new Environment();
     private Environment environment = globals;
+    private final Map<Expr, Integer> locals = new HashMap<>();
 
     Interpreter() {
         globals.define("clock", new LoxCallable() {
@@ -48,7 +51,14 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     @Override
     public Object visitAssignExpr(Assign expr) {
         var value = evaluate(expr.value());
-        environment.assign(expr.name(), value);
+
+        var distance = locals.get(expr);
+        if (distance == null) {
+            globals.assign(expr.name(), value);
+        } else {
+            environment.assignAt(distance, expr.name(), value);
+        }
+
         return value;
     }
 
@@ -202,7 +212,16 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
 
     @Override
     public Object visitVariableExpr(Variable expr) {
-        return environment.get(expr.name());
+        return lookUpVariable(expr.name(), expr);
+    }
+
+    private Object lookUpVariable(Token name, Expr expr) {
+        var distance = locals.get(expr);
+        if (distance == null) {
+            return globals.get(name);
+        } else {
+            return environment.getAt(distance, name.lexeme());
+        }
     }
 
     @Override
@@ -228,10 +247,7 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
         var previous = this.environment;
         try {
             this.environment = environment;
-
-            for (var statement : statements) {
-                execute(statement);
-            }
+            statements.forEach(this::execute);
         } finally {
             this.environment = previous;
         }
@@ -239,12 +255,14 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
 
     void interpret(List<Stmt> statements) {
         try {
-            for (var statement : statements) {
-                execute(statement);
-            }
+            statements.forEach(this::execute);
         } catch (RuntimeError error) {
             Lox.runtimeError(error);
         }
+    }
+
+    void resolve(Expr expr, int depth) {
+        locals.put(expr, depth);
     }
 
     private void checkNumberOperand(Token operator, Object operand) {
