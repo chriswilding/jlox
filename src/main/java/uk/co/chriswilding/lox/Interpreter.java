@@ -1,7 +1,9 @@
 package uk.co.chriswilding.lox;
 
+import lombok.Getter;
 import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
+import uk.co.chriswilding.lox.expr.Call;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
@@ -10,6 +12,7 @@ import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
 import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.Function;
 import uk.co.chriswilding.lox.stmt.If;
 import uk.co.chriswilding.lox.stmt.Print;
 import uk.co.chriswilding.lox.stmt.Stmt;
@@ -19,7 +22,28 @@ import uk.co.chriswilding.lox.stmt.While;
 import java.util.List;
 
 class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.chriswilding.lox.stmt.Visitor<Void> {
-    private Environment environment = new Environment();
+    @Getter
+    private final Environment globals = new Environment();
+    private Environment environment = globals;
+
+    Interpreter() {
+        globals.define("clock", new LoxCallable() {
+            @Override
+            public int arity() {
+                return 0;
+            }
+
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                return (double) System.currentTimeMillis() / 1000.0;
+            }
+
+            @Override
+            public String toString() {
+                return "<native fn>";
+            }
+        });
+    }
 
     @Override
     public Object visitAssignExpr(Assign expr) {
@@ -87,8 +111,31 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     }
 
     @Override
+    public Object visitCallExpr(Call expr) {
+        var callee = evaluate(expr.callee());
+        var arguments = expr.arguments().stream().map(this::evaluate).toList();
+
+        if (!(callee instanceof LoxCallable function)) {
+            throw new RuntimeError(expr.paren(), "Can only call functions and classes.");
+        }
+
+        if (arguments.size() != function.arity()) {
+            throw new RuntimeError(expr.paren(), "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
+        }
+
+        return function.call(this, arguments);
+    }
+
+    @Override
     public Void visitExpressionStmt(Expression stmt) {
         evaluate(stmt.expression());
+        return null;
+    }
+
+    @Override
+    public Void visitFunctionStmt(Function stmt) {
+        var function = new LoxFunction(stmt, environment);
+        environment.define(stmt.name().lexeme(), function);
         return null;
     }
 
@@ -133,6 +180,13 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     }
 
     @Override
+    public Void visitReturnStmt(uk.co.chriswilding.lox.stmt.Return stmt) {
+        Object value = null;
+        if (stmt.value() != null) value = evaluate(stmt.value());
+        throw new uk.co.chriswilding.lox.Return(value);
+    }
+
+    @Override
     public Object visitUnaryExpr(Unary expr) {
         var right = evaluate(expr.right());
 
@@ -168,6 +222,19 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
             execute(stmt.body());
         }
         return null;
+    }
+
+    void executeBlock(List<Stmt> statements, Environment environment) {
+        var previous = this.environment;
+        try {
+            this.environment = environment;
+
+            for (var statement : statements) {
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
     }
 
     void interpret(List<Stmt> statements) {
@@ -208,19 +275,6 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
         if (object == null) return false;
         if (object instanceof Boolean) return (boolean) object;
         return true;
-    }
-
-    private void executeBlock(List<Stmt> statements, Environment environment) {
-        var previous = this.environment;
-        try {
-            this.environment = environment;
-
-            for (var statement : statements) {
-                execute(statement);
-            }
-        } finally {
-            this.environment = previous;
-        }
     }
 
     private String stringify(Object object) {

@@ -3,6 +3,7 @@ package uk.co.chriswilding.lox;
 import lombok.RequiredArgsConstructor;
 import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
+import uk.co.chriswilding.lox.expr.Call;
 import uk.co.chriswilding.lox.expr.Expr;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
@@ -11,8 +12,10 @@ import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
 import uk.co.chriswilding.lox.stmt.Expression;
+import uk.co.chriswilding.lox.stmt.Function;
 import uk.co.chriswilding.lox.stmt.If;
 import uk.co.chriswilding.lox.stmt.Print;
+import uk.co.chriswilding.lox.stmt.Return;
 import uk.co.chriswilding.lox.stmt.Stmt;
 import uk.co.chriswilding.lox.stmt.Var;
 import uk.co.chriswilding.lox.stmt.While;
@@ -84,6 +87,20 @@ class Parser {
         return statements;
     }
 
+    private Expr call() {
+        var expr = primary();
+
+        while (true) {
+            if (match(TokenType.LEFT_PAREN)) {
+                expr = finishCall(expr);
+            } else {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
     private boolean check(TokenType type) {
         if (isAtEnd()) return false;
         return peek().type() == type;
@@ -109,6 +126,7 @@ class Parser {
 
     private Stmt declaration() {
         try {
+            if (match(TokenType.FUN)) return function("function");
             if (match(TokenType.VAR)) return varDeclaration();
             return statement();
         } catch (ParseError error) {
@@ -156,6 +174,22 @@ class Parser {
         return expr;
     }
 
+    private Expr finishCall(Expr callee) {
+        var arguments = new ArrayList<Expr>();
+        if (!check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (arguments.size() >= 255) {
+                    error(peek(), "Can't have more than 255 arguments.");
+                }
+                arguments.add(expression());
+            } while (match(TokenType.COMMA));
+        }
+
+        var paren = consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+
+        return new Call(callee, paren, arguments);
+    }
+
     private Stmt forStatement() {
         consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
 
@@ -196,6 +230,26 @@ class Parser {
         }
 
         return body;
+    }
+
+    private Function function(String kind) {
+        var name = consume(TokenType.IDENTIFIER, "Expect " + kind + " name.");
+        consume(TokenType.LEFT_PAREN, "Expect '(' after " + kind + " name.");
+        var parameters = new ArrayList<Token>();
+        if (!check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (parameters.size() >= 255) {
+                    error(peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.add(consume(TokenType.IDENTIFIER, "Expect parameter name."));
+            } while (match(TokenType.COMMA));
+        }
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+        consume(TokenType.LEFT_BRACE, "Expect '{' before " + kind + " body.");
+        var body = block();
+        return new Function(name, parameters, body);
     }
 
     private Stmt ifStatement() {
@@ -275,10 +329,22 @@ class Parser {
         return new Print(value);
     }
 
+    private Stmt returnStatement() {
+        var keyword = previous();
+        Expr value = null;
+        if (!check(TokenType.SEMICOLON)) {
+            value = expression();
+        }
+
+        consume(TokenType.SEMICOLON, "Expect ';' after return value.");
+        return new Return(keyword, value);
+    }
+
     private Stmt statement() {
         if (match(TokenType.FOR)) return forStatement();
         if (match(TokenType.IF)) return ifStatement();
         if (match(TokenType.PRINT)) return printStatement();
+        if (match(TokenType.RETURN)) return returnStatement();
         if (match(TokenType.WHILE)) return whileStatement();
         if (match(TokenType.LEFT_BRACE)) return new Block(block());
 
@@ -326,7 +392,7 @@ class Parser {
             return new Unary(operator, right);
         }
 
-        return primary();
+        return call();
     }
 
     private Stmt varDeclaration() {

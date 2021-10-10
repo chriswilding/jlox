@@ -5,9 +5,13 @@ public interface Visitor<R> {
 
     R visitExpressionStmt(Expression stmt);
 
+    R visitFunctionStmt(Function function);
+
     R visitIfStmt(If stmt);
 
     R visitPrintStmt(Print stmt);
+
+    R visitReturnStmt(Return aReturn);
 
     R visitVarStmt(Var stmt);
 

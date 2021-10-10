@@ -5,6 +5,8 @@ public interface Visitor<R> {
 
     R visitBinaryExpr(Binary expr);
 
+    R visitCallExpr(Call expr);
+
     R visitGroupingExpr(Grouping expr);
 
     R visitLiteralExpr(Literal expr);
