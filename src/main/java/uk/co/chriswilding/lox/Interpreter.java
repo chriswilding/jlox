@@ -5,12 +5,16 @@ import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Call;
 import uk.co.chriswilding.lox.expr.Expr;
+import uk.co.chriswilding.lox.expr.Get;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Logical;
+import uk.co.chriswilding.lox.expr.Set;
+import uk.co.chriswilding.lox.expr.This;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
+import uk.co.chriswilding.lox.stmt.Class;
 import uk.co.chriswilding.lox.stmt.Expression;
 import uk.co.chriswilding.lox.stmt.Function;
 import uk.co.chriswilding.lox.stmt.If;
@@ -137,6 +141,21 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
     }
 
     @Override
+    public Void visitClassStmt(Class stmt) {
+        environment.define(stmt.name().lexeme(), null);
+
+        var methods = new HashMap<String, LoxFunction>();
+        stmt.methods().forEach(method -> {
+            var function = new LoxFunction(method, environment, method.name().lexeme().equals("init"));
+            methods.put(method.name().lexeme(), function);
+        });
+
+        var klass = new LoxClass(stmt.name().lexeme(), methods);
+        environment.assign(stmt.name(), klass);
+        return null;
+    }
+
+    @Override
     public Void visitExpressionStmt(Expression stmt) {
         evaluate(stmt.expression());
         return null;
@@ -144,9 +163,19 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
 
     @Override
     public Void visitFunctionStmt(Function stmt) {
-        var function = new LoxFunction(stmt, environment);
+        var function = new LoxFunction(stmt, environment, false);
         environment.define(stmt.name().lexeme(), function);
         return null;
+    }
+
+    @Override
+    public Object visitGetExpr(Get expr) {
+        var object = evaluate(expr.object());
+        if (object instanceof LoxInstance instance) {
+            return instance.get(expr.name());
+        }
+
+        throw new RuntimeError(expr.name(), "Only instances have properties.");
     }
 
     @Override
@@ -194,6 +223,24 @@ class Interpreter implements uk.co.chriswilding.lox.expr.Visitor<Object>, uk.co.
         Object value = null;
         if (stmt.value() != null) value = evaluate(stmt.value());
         throw new uk.co.chriswilding.lox.Return(value);
+    }
+
+    @Override
+    public Object visitSetExpr(Set expr) {
+        var object = evaluate(expr.object());
+
+        if (!(object instanceof LoxInstance)) {
+            throw new RuntimeError(expr.name(), "Only instances have fields.");
+        }
+
+        var value = evaluate(expr.value());
+        ((LoxInstance) object).set(expr.name(), value);
+        return value;
+    }
+
+    @Override
+    public Object visitThisExpr(This expr) {
+        return lookUpVariable(expr.keyword(), expr);
     }
 
     @Override

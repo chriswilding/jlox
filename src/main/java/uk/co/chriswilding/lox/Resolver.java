@@ -5,12 +5,16 @@ import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Call;
 import uk.co.chriswilding.lox.expr.Expr;
+import uk.co.chriswilding.lox.expr.Get;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Logical;
+import uk.co.chriswilding.lox.expr.Set;
+import uk.co.chriswilding.lox.expr.This;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
+import uk.co.chriswilding.lox.stmt.Class;
 import uk.co.chriswilding.lox.stmt.Expression;
 import uk.co.chriswilding.lox.stmt.Function;
 import uk.co.chriswilding.lox.stmt.If;
@@ -27,14 +31,23 @@ import java.util.Stack;
 
 @RequiredArgsConstructor
 class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chriswilding.lox.stmt.Visitor<Void> {
+    private enum ClassType {
+        NONE,
+        CLASS
+    }
+
     private enum FunctionType {
         NONE,
-        FUNCTION
+        FUNCTION,
+        INITIALIZER,
+        METHOD
     }
 
     private final Interpreter interpreter;
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+    private ClassType currentClass = ClassType.NONE;
     private FunctionType currentFunction = FunctionType.NONE;
+
 
     @Override
     public Void visitAssignExpr(Assign expr) {
@@ -66,6 +79,30 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
     }
 
     @Override
+    public Void visitClassStmt(Class stmt) {
+        var enclosingClass = currentClass;
+        currentClass = ClassType.CLASS;
+
+        declare(stmt.name());
+        define(stmt.name());
+
+        beginScope();
+        scopes.peek().put("this", true);
+
+        stmt.methods().forEach(method -> {
+            var declaration = FunctionType.METHOD;
+            if (method.name().lexeme().equals("init")) {
+                declaration = FunctionType.INITIALIZER;
+            }
+            resolveFunction(method, declaration);
+        });
+
+        endScope();
+
+        return null;
+    }
+
+    @Override
     public Void visitExpressionStmt(Expression stmt) {
         resolve(stmt.expression());
         return null;
@@ -77,6 +114,12 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
         define(stmt.name());
 
         resolveFunction(stmt, FunctionType.FUNCTION);
+        return null;
+    }
+
+    @Override
+    public Void visitGetExpr(Get expr) {
+        resolve(expr.object());
         return null;
     }
 
@@ -119,8 +162,28 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
         }
 
         if (stmt.value() != null) {
+            if (currentFunction == FunctionType.INITIALIZER) {
+                Lox.error(stmt.keyword(), "Can't return a value from an initializer.");
+            }
             resolve(stmt.value());
         }
+        return null;
+    }
+
+    @Override
+    public Void visitSetExpr(Set expr) {
+        resolve(expr.value());
+        resolve(expr.object());
+        return null;
+    }
+
+    @Override
+    public Void visitThisExpr(This expr) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword(), "Can't use 'this' outside of a class.");
+            return null;
+        }
+        resolveLocal(expr, expr.keyword());
         return null;
     }
 

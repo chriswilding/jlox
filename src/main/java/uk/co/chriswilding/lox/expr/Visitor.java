@@ -7,11 +7,17 @@ public interface Visitor<R> {
 
     R visitCallExpr(Call expr);
 
+    R visitGetExpr(Get expr);
+
     R visitGroupingExpr(Grouping expr);
 
     R visitLiteralExpr(Literal expr);
 
     R visitLogicalExpr(Logical expr);
+
+    R visitSetExpr(Set expr);
+
+    R visitThisExpr(This expr);
 
     R visitUnaryExpr(Unary expr);
 

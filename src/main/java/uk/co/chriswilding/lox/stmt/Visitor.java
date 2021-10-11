@@ -3,6 +3,8 @@ package uk.co.chriswilding.lox.stmt;
 public interface Visitor<R> {
     R visitBlockStmt(Block stmt);
 
+    R visitClassStmt(Class stmt);
+
     R visitExpressionStmt(Expression stmt);
 
     R visitFunctionStmt(Function stmt);

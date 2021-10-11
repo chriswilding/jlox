@@ -5,12 +5,16 @@ import uk.co.chriswilding.lox.expr.Assign;
 import uk.co.chriswilding.lox.expr.Binary;
 import uk.co.chriswilding.lox.expr.Call;
 import uk.co.chriswilding.lox.expr.Expr;
+import uk.co.chriswilding.lox.expr.Get;
 import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Logical;
+import uk.co.chriswilding.lox.expr.Set;
+import uk.co.chriswilding.lox.expr.This;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
 import uk.co.chriswilding.lox.stmt.Block;
+import uk.co.chriswilding.lox.stmt.Class;
 import uk.co.chriswilding.lox.stmt.Expression;
 import uk.co.chriswilding.lox.stmt.Function;
 import uk.co.chriswilding.lox.stmt.If;
@@ -68,6 +72,9 @@ class Parser {
             if (expr instanceof Variable) {
                 var name = ((Variable) expr).name();
                 return new Assign(name, value);
+            } else if (expr instanceof Get) {
+                var get = (Get) expr;
+                return new Set(get.object(), get.name(), value);
             }
 
             error(equals, "Invalid assignment target.");
@@ -93,6 +100,9 @@ class Parser {
         while (true) {
             if (match(TokenType.LEFT_PAREN)) {
                 expr = finishCall(expr);
+            } else if (match(TokenType.DOT)) {
+                var name = consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
+                expr = new Get(expr, name);
             } else {
                 break;
             }
@@ -104,6 +114,20 @@ class Parser {
     private boolean check(TokenType type) {
         if (isAtEnd()) return false;
         return peek().type() == type;
+    }
+
+    private Stmt classDeclaration() {
+        var name = consume(TokenType.IDENTIFIER, "Expect class name.");
+        consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+
+        var methods = new ArrayList<Function>();
+        while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+            methods.add(function("method"));
+        }
+
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+
+        return new Class(name, methods);
     }
 
     private Expr comparison() {
@@ -126,6 +150,7 @@ class Parser {
 
     private Stmt declaration() {
         try {
+            if (match(TokenType.CLASS)) return classDeclaration();
             if (match(TokenType.FUN)) return function("function");
             if (match(TokenType.VAR)) return varDeclaration();
             return statement();
@@ -309,6 +334,8 @@ class Parser {
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return new Literal(previous().literal());
         }
+
+        if (match(TokenType.THIS)) return new This(previous());
 
         if (match(TokenType.IDENTIFIER)) {
             return new Variable(previous());
