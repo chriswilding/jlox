@@ -10,6 +10,7 @@ import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Logical;
 import uk.co.chriswilding.lox.expr.Set;
+import uk.co.chriswilding.lox.expr.Super;
 import uk.co.chriswilding.lox.expr.This;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
@@ -118,6 +119,13 @@ class Parser {
 
     private Stmt classDeclaration() {
         var name = consume(TokenType.IDENTIFIER, "Expect class name.");
+
+        Variable superclass = null;
+        if (match(TokenType.LESS)) {
+            consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superclass = new Variable(previous());
+        }
+
         consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
 
         var methods = new ArrayList<Function>();
@@ -127,7 +135,7 @@ class Parser {
 
         consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
 
-        return new Class(name, methods);
+        return new Class(name, superclass, methods);
     }
 
     private Expr comparison() {
@@ -333,6 +341,13 @@ class Parser {
 
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return new Literal(previous().literal());
+        }
+
+        if (match(TokenType.SUPER)) {
+            var keyword = previous();
+            consume(TokenType.DOT, "Expect '.' after 'super'.");
+            var method = consume(TokenType.IDENTIFIER, "Expect superclass method name.");
+            return new Super(keyword, method);
         }
 
         if (match(TokenType.THIS)) return new This(previous());

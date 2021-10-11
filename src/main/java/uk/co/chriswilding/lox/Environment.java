@@ -1,5 +1,6 @@
 package uk.co.chriswilding.lox;
 
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 
@@ -9,6 +10,7 @@ import java.util.Map;
 @NoArgsConstructor(force = true)
 @RequiredArgsConstructor
 class Environment {
+    @Getter
     private final Environment enclosing;
 
     private final Map<String, Object> values = new HashMap<>();

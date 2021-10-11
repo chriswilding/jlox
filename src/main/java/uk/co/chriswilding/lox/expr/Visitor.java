@@ -17,6 +17,8 @@ public interface Visitor<R> {
 
     R visitSetExpr(Set expr);
 
+    R visitSuperExpr(Super expr);
+
     R visitThisExpr(This expr);
 
     R visitUnaryExpr(Unary expr);

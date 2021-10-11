@@ -10,6 +10,7 @@ import uk.co.chriswilding.lox.expr.Grouping;
 import uk.co.chriswilding.lox.expr.Literal;
 import uk.co.chriswilding.lox.expr.Logical;
 import uk.co.chriswilding.lox.expr.Set;
+import uk.co.chriswilding.lox.expr.Super;
 import uk.co.chriswilding.lox.expr.This;
 import uk.co.chriswilding.lox.expr.Unary;
 import uk.co.chriswilding.lox.expr.Variable;
@@ -33,7 +34,8 @@ import java.util.Stack;
 class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chriswilding.lox.stmt.Visitor<Void> {
     private enum ClassType {
         NONE,
-        CLASS
+        CLASS,
+        SUBCLASS
     }
 
     private enum FunctionType {
@@ -86,6 +88,18 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
         declare(stmt.name());
         define(stmt.name());
 
+        if (stmt.superclass() != null && stmt.name().lexeme().equals(stmt.superclass().name().lexeme())) {
+            Lox.error(stmt.superclass().name(), "A class can't inherit from itself.");
+        }
+
+        if (stmt.superclass() != null) {
+            currentClass = ClassType.SUBCLASS;
+            resolve(stmt.superclass());
+
+            beginScope();
+            scopes.peek().put("super", true);
+        }
+
         beginScope();
         scopes.peek().put("this", true);
 
@@ -98,6 +112,10 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
         });
 
         endScope();
+
+        if (stmt.superclass() != null) endScope();
+
+        currentClass = enclosingClass;
 
         return null;
     }
@@ -174,6 +192,18 @@ class Resolver implements uk.co.chriswilding.lox.expr.Visitor<Void>, uk.co.chris
     public Void visitSetExpr(Set expr) {
         resolve(expr.value());
         resolve(expr.object());
+        return null;
+    }
+
+    @Override
+    public Void visitSuperExpr(Super expr) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword(), "Can't use 'super' outside of a class.");
+        } else if (currentClass != ClassType.SUBCLASS) {
+            Lox.error(expr.keyword(), "Can't use 'super' in a class with no superclass.");
+        }
+
+        resolveLocal(expr, expr.keyword());
         return null;
     }
 
