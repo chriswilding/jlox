@@ -2,7 +2,7 @@
 
 Lox is the programming language from [Crafting Interpreters](https://craftinginterpreters.com) by Bob Nystrom.
 
-This repository contains my implementation of the jlox tree-walk interpreter written while following the book.
+This repository contains my implementation of the jlox tree-walk interpreter written while following the book. My implementation uses a number of Java 17 features includes records and switch expressions.
 
 ## Prerequisites
 
@@ -19,11 +19,7 @@ $ mvn clean compile
 
 ```sh
 $ mvn clean compile exec:java -Dexec.mainClass="uk.co.chriswilding.lox.Lox"
-> var hello = "world";
-Token[type=VAR, lexeme=var, literal=null, line=1]
-Token[type=IDENTIFIER, lexeme=hello, literal=null, line=1]
-Token[type=EQUAL, lexeme==, literal=null, line=1]
-Token[type=STRING, lexeme="world", literal=world, line=1]
-Token[type=SEMICOLON, lexeme=;, literal=null, line=1]
-Token[type=EOF, lexeme=, literal=null, line=1]
+> fun fib(n) { if (n < 2) return n; return fib(n - 2) + fib(n - 1); }
+> print fib(35) == 9227465;
+true
 ```
